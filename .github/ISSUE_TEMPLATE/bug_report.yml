@@ -1,0 +1,30 @@
+name: Bug report
+description: Something is wrong with the image or its behaviour
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including the image tag/digest you used.
+      placeholder: |
+        Image: ghcr.io/rijksictgilde/nginx-base:2026.06.0@sha256:...
+        Observed: ...
+        Expected: ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal Dockerfile / commands that reproduce the issue.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Runtime (Docker/Kubernetes version), platform/arch.
+    validations:
+      required: false

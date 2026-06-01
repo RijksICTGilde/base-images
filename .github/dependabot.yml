@@ -1,6 +1,35 @@
 version: 2
+
+# Two-layer patching strategy (see SECURITY.md):
+#  - OS packages (Alpine/OpenSSL) are patched automatically by the DAILY rebuild
+#    via `apk upgrade` — NOT by Dependabot.
+#  - Build tooling below is bumped by Dependabot with a cooldown so only
+#    community-vetted (aged) releases are proposed, mitigating compromised-update
+#    attacks. Patch/minor auto-merge after CI; major stays manual.
 updates:
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

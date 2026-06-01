@@ -1,0 +1,27 @@
+name: CVE / rebuild request
+description: A vulnerability in the published image that a rebuild would fix
+labels: [security, rebuild]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The image is rebuilt **daily** with `apk upgrade`, so most OS CVEs clear
+        automatically. Open this if a fix exists upstream but the published image
+        hasn't picked it up yet.
+  - type: input
+    id: image
+    attributes:
+      label: Affected image (tag + digest)
+      placeholder: ghcr.io/rijksictgilde/nginx-base:2026.06.0@sha256:...
+    validations:
+      required: true
+  - type: textarea
+    id: cves
+    attributes:
+      label: Vulnerable package(s) and CVE(s)
+      description: Package, current version, fixed version, and CVE IDs (e.g. from a Trivy scan).
+      placeholder: |
+        libcrypto3 3.3.3-r0 -> fixed in 3.3.7-r0
+        CVE-2026-31789 (CRITICAL), ...
+    validations:
+      required: true
