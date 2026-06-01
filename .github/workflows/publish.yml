@@ -145,23 +145,3 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           git tag "$VERSION"
           git push origin "$VERSION"
-
-      # Keep the README's copy-and-go example pinned to the just-published digest.
-      # Pushes straight to main (the github-actions app is a ruleset bypass actor);
-      # GITHUB_TOKEN pushes don't re-trigger workflows, so this can't loop.
-      - name: Refresh README pinned reference
-        continue-on-error: true   # never fail an already-published release on a docs race
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          sed -i -E "s#(FROM ghcr\.io/rijksictgilde/nginx-base):[^[:space:]]*#\1:${VERSION}@${DIGEST}#g" README.md
-          if git diff --quiet README.md; then
-            echo "README already current"; exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "docs: pin README example to ${VERSION}"
-          git pull --rebase origin main
-          git push origin HEAD:main

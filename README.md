@@ -12,9 +12,10 @@ image is **signed** and ships with an **SBOM** and **build-provenance** attestat
 
 ## Usage
 
-Add it to your project's `Dockerfile`. The reference below is **pinned by digest** — so your
-builds are reproducible and you control upgrades (Dependabot bumps it for you). It's refreshed to
-the newest release on every build, so you can copy it as-is:
+Add it to your project's `Dockerfile`, **pinned by digest** — so builds are reproducible and you
+control upgrades (Dependabot bumps it for you). Grab the current version and digest from the
+[package page](https://github.com/RijksICTGilde/nginx-base/pkgs/container/nginx-base) (the badge
+above always links to the latest):
 
 ```dockerfile
 FROM ghcr.io/rijksictgilde/nginx-base:2026.06.1@sha256:61ac904cd9438c6db6977c1ae16a472d914902c90b99d489d0e18394c3292eeb
