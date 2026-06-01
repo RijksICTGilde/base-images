@@ -12,18 +12,12 @@ image is **signed** and ships with an **SBOM** and **build-provenance** attestat
 
 ## Usage
 
-In your project's `Dockerfile`:
+Add it to your project's `Dockerfile`. The reference below is **pinned by digest** — so your
+builds are reproducible and you control upgrades (Dependabot bumps it for you). The newest
+version + digest is always shown by the version badge above:
 
 ```dockerfile
-FROM ghcr.io/rijksictgilde/nginx-base:latest
-
-COPY dist/ /usr/share/nginx/html/
-```
-
-**For production, pin by digest** so your build is reproducible and Dependabot bumps it for you:
-
-```dockerfile
-FROM ghcr.io/rijksictgilde/nginx-base:2026.06.0@sha256:<digest>
+FROM ghcr.io/rijksictgilde/nginx-base:2026.06.1@sha256:61ac904cd9438c6db6977c1ae16a472d914902c90b99d489d0e18394c3292eeb
 
 COPY dist/ /usr/share/nginx/html/
 ```
@@ -57,9 +51,28 @@ The headers live in `/etc/nginx/security-headers.conf`. To tighten the CSP (e.g.
 `default-src 'self'`) ship your own copy in your downstream image:
 
 ```dockerfile
-FROM ghcr.io/rijksictgilde/nginx-base:latest
+FROM ghcr.io/rijksictgilde/nginx-base:2026.06.1@sha256:61ac904cd9438c6db6977c1ae16a472d914902c90b99d489d0e18394c3292eeb
 COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY dist/ /usr/share/nginx/html/
+```
+
+## Lean & low-footprint
+
+Deliberately small and frugal — good for dense Kubernetes packing and tight resource limits:
+
+- **~52 MB** on disk (Alpine + nginx, nothing else added).
+- **~2–5 MB** RAM at idle, and it stays low under load — nginx serving static files is very
+  memory-frugal.
+- **1 worker, 128 connections** by default. A single worker serves 128 simultaneous connections;
+  for short-lived static requests that sustains a high request rate — plenty for typical sites.
+  Need more headroom? Raise `worker_processes`/`worker_connections` in your own `nginx.conf`.
+
+So you can give it tiny requests/limits, for example:
+
+```yaml
+resources:
+  requests: { cpu: 10m, memory: 16Mi }
+  limits:   { memory: 64Mi }
 ```
 
 ## Local testing
