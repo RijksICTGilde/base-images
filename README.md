@@ -12,18 +12,12 @@ image is **signed** and ships with an **SBOM** and **build-provenance** attestat
 
 ## Usage
 
-In your project's `Dockerfile`:
+Add it to your project's `Dockerfile`. The reference below is **pinned by digest** — so your
+builds are reproducible and you control upgrades (Dependabot bumps it for you). It's refreshed to
+the newest release on every build, so you can copy it as-is:
 
 ```dockerfile
-FROM ghcr.io/rijksictgilde/nginx-base:latest
-
-COPY dist/ /usr/share/nginx/html/
-```
-
-**For production, pin by digest** so your build is reproducible and Dependabot bumps it for you:
-
-```dockerfile
-FROM ghcr.io/rijksictgilde/nginx-base:2026.06.0@sha256:<digest>
+FROM ghcr.io/rijksictgilde/nginx-base:2026.06.1@sha256:61ac904cd9438c6db6977c1ae16a472d914902c90b99d489d0e18394c3292eeb
 
 COPY dist/ /usr/share/nginx/html/
 ```
@@ -57,9 +51,25 @@ The headers live in `/etc/nginx/security-headers.conf`. To tighten the CSP (e.g.
 `default-src 'self'`) ship your own copy in your downstream image:
 
 ```dockerfile
-FROM ghcr.io/rijksictgilde/nginx-base:latest
+FROM ghcr.io/rijksictgilde/nginx-base:2026.06.1@sha256:61ac904cd9438c6db6977c1ae16a472d914902c90b99d489d0e18394c3292eeb
 COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY dist/ /usr/share/nginx/html/
+```
+
+## Lean & low-footprint
+
+Small, lean, and built for real traffic:
+
+- **~52 MB image, ~2–5 MB RAM** — pack pods densely and set tiny resource limits.
+- **Serves thousands of concurrent users** on the default settings
+- **Memory stays flat under load** — files are streamed straight from disk
+
+Example resources block:
+
+```yaml
+resources:
+  requests: { cpu: 10m, memory: 16Mi }
+  limits:   { memory: 64Mi }
 ```
 
 ## Local testing
