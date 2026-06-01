@@ -1,0 +1,10 @@
+# Default owners for everything in this repository.
+# Required reviews are enforced via branch protection on `main`.
+* @uittenbroekrobbert
+
+# Security-sensitive surfaces get explicit ownership.
+/Dockerfile            @uittenbroekrobbert
+/nginx.conf            @uittenbroekrobbert
+/security-headers.conf @uittenbroekrobbert
+/.github/              @uittenbroekrobbert
+/SECURITY.md           @uittenbroekrobbert

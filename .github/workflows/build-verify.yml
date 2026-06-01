@@ -6,11 +6,38 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: read by default, raise only where needed (SARIF upload).
+permissions:
+  contents: read
+
 jobs:
   build-and-verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # upload Trivy SARIF to the Security tab
     steps:
-      - uses: actions/checkout@v4
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          # Allowlist derived from the audit run (26748936625). Egress outside
+          # this set is blocked — a runtime backstop against secret exfiltration.
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudfront.docker.com:443
+            dl-cdn.alpinelinux.org:443
+            mirror.gcr.io:443
+            check.trivy.dev:443
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Build base image
         run: docker build -t nginx-base .
@@ -19,19 +46,74 @@ jobs:
         run: |
           mkdir -p /tmp/test-site
           echo '<html><body>ok</body></html>' > /tmp/test-site/index.html
+          echo 'body{color:red}' > /tmp/test-site/app.css
+          echo 'SECRET' > /tmp/test-site/.env
           cat <<'DOCKERFILE' > /tmp/test-site/Dockerfile
           FROM nginx-base
           COPY index.html /usr/share/nginx/html/index.html
+          COPY app.css /usr/share/nginx/html/app.css
+          COPY .env /usr/share/nginx/html/.env
           DOCKERFILE
           docker build -t nginx-base-test /tmp/test-site
 
-      - name: Trivy CVE scan
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+      # --- Security scanning -------------------------------------------------
+
+      - name: Trivy CVE scan (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: nginx-base
+          scan-type: image
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Trivy CVE scan (SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: nginx-base
+          scan-type: image
+          format: sarif
+          output: trivy-image.sarif
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Upload image SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@84498526a009a99c875e83ef4821a8ba52de7c22 # v2.25.5
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      # Gate on table format: SARIF format ignores the severity filter and would
+      # fail on any finding (e.g. the intentional missing-HEALTHCHECK LOW).
+      - name: Trivy config (Dockerfile misconfiguration — gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: Dockerfile
           format: table
           exit-code: '1'
           severity: CRITICAL,HIGH
+
+      - name: Trivy config (SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: Dockerfile
+          format: sarif
+          output: trivy-config.sarif
+
+      - name: Upload config SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@84498526a009a99c875e83ef4821a8ba52de7c22 # v2.25.5
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+      # --- Functional & hardening verification -------------------------------
 
       - name: Dump versions
         run: |
@@ -39,17 +121,17 @@ jobs:
           docker run --rm nginx-base-test nginx -v
           echo "=== Alpine version ==="
           docker run --rm nginx-base-test cat /etc/alpine-release
-          echo "=== OpenSSL version ==="
-          docker run --rm nginx-base-test openssl version
+          echo "=== OpenSSL libraries (CLI is intentionally absent) ==="
+          docker run --rm nginx-base-test sh -c "apk info -v | grep -iE 'libcrypto|libssl'"
 
       - name: Verify nginx config
         run: docker run --rm nginx-base-test nginx -t
 
       - name: Verify non-root
         run: |
-          USER=$(docker run --rm nginx-base-test id -u)
-          echo "Running as UID: $USER"
-          if [ "$USER" = "0" ]; then
+          UID_VAL=$(docker run --rm nginx-base-test id -u)
+          echo "Running as UID: $UID_VAL"
+          if [ "$UID_VAL" = "0" ]; then
             echo "FAIL: container is running as root"
             exit 1
           fi
@@ -67,23 +149,54 @@ jobs:
             exit 1
           fi
 
-      - name: Verify security headers
+      - name: Verify security headers (root and static asset)
         run: |
           docker run -d --name header-test -p 8081:8080 nginx-base-test
           sleep 2
-          HEADERS=$(curl -sI http://localhost:8081/)
-          echo "$HEADERS"
+          assert_headers() {
+            local path="$1"
+            local headers
+            headers=$(curl -sI "http://localhost:8081${path}")
+            echo "--- ${path} ---"
+            echo "$headers"
+            for h in "x-content-type-options: nosniff" "x-frame-options: SAMEORIGIN" "referrer-policy" "strict-transport-security" "content-security-policy" "permissions-policy"; do
+              echo "$headers" | grep -qi "$h" || { echo "FAIL: missing '$h' on ${path}"; exit 1; }
+            done
+          }
+          # Regression: static assets must carry the SAME headers as / (add_header is not inherited).
+          assert_headers "/"
+          assert_headers "/app.css"
           docker stop header-test
-          echo "$HEADERS" | grep -qi "x-content-type-options: nosniff" || { echo "FAIL: missing X-Content-Type-Options"; exit 1; }
-          echo "$HEADERS" | grep -qi "x-frame-options: SAMEORIGIN" || { echo "FAIL: missing X-Frame-Options"; exit 1; }
-          echo "$HEADERS" | grep -qi "referrer-policy" || { echo "FAIL: missing Referrer-Policy"; exit 1; }
-          echo "$HEADERS" | grep -qi "strict-transport-security" || { echo "FAIL: missing Strict-Transport-Security"; exit 1; }
+
+      - name: Verify HTTP method restriction
+        run: |
+          docker run -d --name method-test -p 8082:8080 nginx-base-test
+          sleep 2
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8082/)
+          docker stop method-test
+          if [ "$STATUS" != "405" ]; then
+            echo "FAIL: expected 405 for POST, got $STATUS"
+            exit 1
+          fi
+          echo "PASS: non-GET/HEAD rejected with 405"
+
+      - name: Verify dotfiles are not served
+        run: |
+          docker run -d --name dotfile-test -p 8083:8080 nginx-base-test
+          sleep 2
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8083/.env)
+          docker stop dotfile-test
+          if [ "$STATUS" = "200" ]; then
+            echo "FAIL: dotfile /.env is served"
+            exit 1
+          fi
+          echo "PASS: dotfile /.env not served (status $STATUS)"
 
       - name: Verify version not exposed
         run: |
-          docker run -d --name version-test -p 8082:8080 nginx-base-test
+          docker run -d --name version-test -p 8084:8080 nginx-base-test
           sleep 2
-          HEADERS=$(curl -sI http://localhost:8082/)
+          HEADERS=$(curl -sI http://localhost:8084/)
           docker stop version-test
           if echo "$HEADERS" | grep -q "Server: nginx/"; then
             echo "FAIL: nginx version is exposed in Server header"

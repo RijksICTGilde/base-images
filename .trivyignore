@@ -1,0 +1,5 @@
+# Intentional design choices — suppressed so the Security tab stays signal-only.
+
+# AVD-DS-0026: missing HEALTHCHECK. By design — use Kubernetes liveness/readiness
+# probes instead (documented in README "Cluster compatibility").
+AVD-DS-0026
