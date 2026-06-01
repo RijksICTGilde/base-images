@@ -58,15 +58,11 @@ COPY dist/ /usr/share/nginx/html/
 
 ## Lean & low-footprint
 
-Small and frugal, and built for real traffic:
+Small, lean, and built for real traffic:
 
 - **~52 MB image, ~2–5 MB RAM** — pack pods densely and set tiny resource limits.
-- **Serves thousands of concurrent users** on the default `1 worker / 128 connections`. Static
-  files go out in milliseconds and free their connection instantly, so the connection count is
-  nowhere near the number of people it serves.
-- **Memory stays flat under load** — files are streamed straight from disk, never held in nginx's
-  memory, and the OS caches hot files for free. More traffic doesn't mean more RAM.
-- **Need more?** Run extra replicas behind your ingress — each pod is tiny, so scaling out is cheap.
+- **Serves thousands of concurrent users** on the default settings
+- **Memory stays flat under load** — files are streamed straight from disk
 
 Example resources block:
 
