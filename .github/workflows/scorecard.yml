@@ -20,7 +20,24 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit
+          # Scorecard probes many services; best-effort allowlist. If the first
+          # run blocks something, the runner logs it — add it here.
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            token.actions.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.securityscorecards.dev:443
+            api.osv.dev:443
+            api.deps.dev:443
+            www.bestpractices.dev:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

@@ -25,7 +25,27 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
-          egress-policy: audit   # observe egress first; switch to 'block' + allowlist once stable
+          # Best-effort allowlist for build + push + keyless sign + attest.
+          # If the first run on main blocks something, the runner logs it — add it here.
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            token.actions.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudfront.docker.com:443
+            dl-cdn.alpinelinux.org:443
+            mirror.gcr.io:443
+            check.trivy.dev:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
