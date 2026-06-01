@@ -18,6 +18,15 @@ a public issue. We aim to acknowledge within 2 business days.
 - `YYYY.MM.PATCH` ([CalVer](https://calver.org/)) — immutable release tags. A new
   patch is published on every (daily) rebuild.
 
+### Retention
+
+Because images are rebuilt nightly and old images carry known CVEs, versions are
+pruned daily: anything **older than 30 days is deleted**, but the **15 newest
+tagged versions and `latest` are always kept**. Pin a recent digest and bump it
+regularly (Dependabot does this for you) — do not rely on a months-old version
+staying pullable. Signatures, SBOMs, and provenance attestations of retained
+images are preserved.
+
 ## How patching works — two independent layers
 
 **Layer A — OS packages (Alpine, OpenSSL): automatic, daily, no human action.**

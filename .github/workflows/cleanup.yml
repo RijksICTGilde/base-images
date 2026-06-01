@@ -1,0 +1,51 @@
+name: Cleanup old images
+
+# Nightly builds accumulate tags, and old images carry known CVEs we don't want
+# pullable. This prunes them while protecting recent releases and never orphaning
+# the cosign signatures / SBOM / provenance attestations of images we keep.
+#
+# Policy: delete versions older than 30 days, but always keep the 15 newest
+# tagged versions + `latest`. Untagged/orphaned manifests are removed.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # daily, an hour after the publish rebuild
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Simulate only (list what would be deleted, delete nothing)'
+        type: string
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write   # delete package versions
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+
+      - name: Prune old image versions
+        uses: dataaxiom/ghcr-cleanup-action@f092b48ba3b604b2a83690dc4b2bbb3392e1045f # v1.2.1
+        with:
+          owner: RijksICTGilde
+          package: nginx-base
+          # Scheduled run prunes for real; manual dispatch defaults to dry-run.
+          dry-run: ${{ inputs.dry_run || 'false' }}
+          older-than: 30 days
+          keep-n-tagged: 15
+          exclude-tags: latest
+          delete-untagged: true
+          delete-orphaned-images: true
+          delete-ghost-images: true
+          validate: true
