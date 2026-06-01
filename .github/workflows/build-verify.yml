@@ -45,8 +45,8 @@ jobs:
       - name: Build test image with sample content
         run: |
           mkdir -p /tmp/test-site
-          echo '<html><body>ok</body></html>' > /tmp/test-site/index.html
-          echo 'body{color:red}' > /tmp/test-site/app.css
+          echo '<html><body>NGINX-BASE-SERVES-OK-7f3a</body></html>' > /tmp/test-site/index.html
+          echo '.marker{content:"CSS-SERVES-OK-9b2c"}' > /tmp/test-site/app.css
           echo 'SECRET' > /tmp/test-site/.env
           cat <<'DOCKERFILE' > /tmp/test-site/Dockerfile
           FROM nginx-base
@@ -136,11 +136,13 @@ jobs:
             exit 1
           fi
 
-      - name: Verify server starts and responds
+      - name: Verify it actually serves the page (status + body)
         run: |
           docker run -d --name test-server -p 8080:8080 nginx-base-test
           sleep 2
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
+          BODY=$(curl -s http://localhost:8080/)
+          CSS=$(curl -s http://localhost:8080/app.css)
           echo "HTTP status: $STATUS"
           docker logs test-server
           docker stop test-server
@@ -148,6 +150,11 @@ jobs:
             echo "FAIL: expected 200, got $STATUS"
             exit 1
           fi
+          # Prove the real bytes are served (COPY + nginx routing + config all work),
+          # not just that something returns 200.
+          echo "$BODY" | grep -q "NGINX-BASE-SERVES-OK-7f3a" || { echo "FAIL: index.html body not served"; exit 1; }
+          echo "$CSS"  | grep -q "CSS-SERVES-OK-9b2c"       || { echo "FAIL: static asset body not served"; exit 1; }
+          echo "PASS: served the actual page and static asset content"
 
       - name: Verify security headers (root and static asset)
         run: |
