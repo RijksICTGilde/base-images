@@ -61,13 +61,34 @@ COPY dist/ /usr/share/nginx/html/
 Deliberately small and frugal — good for dense Kubernetes packing and tight resource limits:
 
 - **~52 MB** on disk (Alpine + nginx, nothing else added).
-- **~2–5 MB** RAM at idle, and it stays low under load — nginx serving static files is very
-  memory-frugal.
-- **1 worker, 128 connections** by default. A single worker serves 128 simultaneous connections;
-  for short-lived static requests that sustains a high request rate — plenty for typical sites.
-  Need more headroom? Raise `worker_processes`/`worker_connections` in your own `nginx.conf`.
+- **~2–5 MB** RAM at idle, staying in the tens of MB even under heavy concurrency.
 
-So you can give it tiny requests/limits, for example:
+### How much traffic can it handle?
+
+A lot more than the connection number suggests. `worker_connections` is the number of
+*simultaneous open connections* at any instant — **not** the number of users. A request for a
+static file completes in milliseconds and frees its slot immediately, and real browsing is mostly
+think-time (a user loads a page, then reads for seconds or minutes). So the number of users served
+is orders of magnitude higher than the connection count.
+
+The default `worker_processes 1` + `worker_connections 128` is a deliberately small setting, not a
+ceiling. nginx is event-driven (it was built to solve the [C10k problem]
+(https://en.wikipedia.org/wiki/C10k_problem)): set `worker_processes auto` and raise
+`worker_connections` (e.g. 1024–4096) in your own `nginx.conf` and a single instance handles
+**tens of thousands of concurrent connections** on modest memory. Max simultaneous clients ≈
+`worker_processes × worker_connections`.
+
+For very high scale (tens to hundreds of thousands of concurrent users), run multiple replicas
+behind your ingress and let the HPA scale them — each pod is tiny, so horizontal scaling is cheap.
+
+### Why the memory stays flat
+
+Files are streamed straight from disk with `sendfile` (zero-copy at the kernel level); nginx does
+**not** load them into its own memory. Hot files are kept in RAM automatically by the OS page cache
+(kernel-managed, outside nginx's footprint). nginx's own memory is only a few KB per connection, so
+its RSS does not grow with file sizes or total traffic — only gently with concurrent connections.
+
+So you can give a pod tiny requests/limits, for example:
 
 ```yaml
 resources:
