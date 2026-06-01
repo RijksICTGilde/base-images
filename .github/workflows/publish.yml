@@ -46,6 +46,7 @@ jobs:
             fulcio.sigstore.dev:443
             rekor.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
+            timestamp.sigstore.dev:443
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -108,22 +109,24 @@ jobs:
           docker logs smoke; docker stop smoke
           [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ] || [ "$STATUS" = "404" ] || { echo "FAIL: server did not respond (got $STATUS)"; exit 1; }
 
-      # --- Publish, sign and attest -----------------------------------------
+      # --- Publish by digest, then sign/attest, then expose the tags --------
+      # Push by digest only (no version/latest tag yet). The public tags are
+      # created at the very end, after signing + attestation succeed — so a
+      # released tag never points to an unsigned or unattested image. If
+      # anything below fails, only an untagged digest exists (cleaned up by the
+      # retention workflow); no consumer can pull it via a release tag.
 
-      - name: Build and push
+      - name: Build and push by digest
         id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
-          push: true
           sbom: true
           provenance: mode=max
           build-args: |
             IMAGE_REVISION=${{ github.sha }}
             IMAGE_CREATED=${{ steps.version.outputs.created }}
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.IMAGE }}:latest
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -139,6 +142,17 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      # Only now expose the image under its release tags — guaranteed signed + attested.
+      - name: Promote to release tags
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}" \
+            --tag "${IMAGE}:latest" \
+            "${IMAGE}@${DIGEST}"
 
       - name: Create git tag
         run: |
