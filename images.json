@@ -1,0 +1,4 @@
+[
+  { "name": "nginx",            "context": "images/nginx",            "image": "ghcr.io/rijksictgilde/nginx-base" },
+  { "name": "haproxy-redirect", "context": "images/haproxy-redirect", "image": "ghcr.io/rijksictgilde/haproxy-redirect" }
+]
