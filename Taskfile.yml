@@ -1,0 +1,32 @@
+version: '3'
+
+# Local helpers mirroring CI. Usage: `task test -- nginx`, `task scan -- haproxy-redirect`.
+# Requires: docker, trivy (for `scan`). Install go-task: https://taskfile.dev
+
+vars:
+  IMAGES: nginx haproxy-redirect
+
+tasks:
+  build:
+    desc: 'Build one image — task build -- <name>'
+    cmds:
+      - docker build -t {{.CLI_ARGS}}:dev images/{{.CLI_ARGS}}/
+
+  test:
+    desc: 'Build + run an image''s functional test — task test -- <name>'
+    cmds:
+      - docker build -t {{.CLI_ARGS}}:dev images/{{.CLI_ARGS}}/
+      - bash images/{{.CLI_ARGS}}/test.sh {{.CLI_ARGS}}:dev
+
+  scan:
+    desc: 'Trivy CVE + Dockerfile-misconfig scan — task scan -- <name>'
+    cmds:
+      - docker build -t {{.CLI_ARGS}}:dev images/{{.CLI_ARGS}}/
+      - trivy image --severity CRITICAL,HIGH --ignore-unfixed {{.CLI_ARGS}}:dev
+      - trivy config images/{{.CLI_ARGS}}/Dockerfile
+
+  test-all:
+    desc: 'Build + test every image'
+    cmds:
+      - for: { var: IMAGES }
+        cmd: task test -- {{.ITEM}}

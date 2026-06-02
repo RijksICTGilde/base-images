@@ -1,4 +1,4 @@
-# Contributing to nginx-base
+# Contributing to base-images
 
 Thanks for helping keep this base image secure and minimal. It is intentionally
 small — the bar for adding anything is high.
@@ -14,18 +14,18 @@ small — the bar for adding anything is high.
 
 ## Development
 
-```bash
-# Build and smoke-test locally
-docker build -t nginx-base .
-./build.sh                      # interactive: build a test site on top
+Each image lives in `images/<name>/`. Build, test, and scan it the same way CI does:
 
-# Scan exactly like CI
-trivy image --severity CRITICAL,HIGH --ignore-unfixed nginx-base
-trivy config Dockerfile
+```bash
+task build -- nginx                 # build one image
+task test  -- haproxy-redirect      # build + run its functional test (test.sh)
+task scan  -- nginx                 # Trivy CVE + Dockerfile-misconfig scan
+task test-all                       # test every image
 ```
 
-Run the same functional checks CI runs: non-root uid, `nginx -t`, security headers
-on `/` **and** a static asset, `POST` → `405`, dotfiles → `404`, version hidden.
+Every image ships a `test.sh` (takes the image ref as `$1`, asserts it actually works,
+exits non-zero on failure) — CI runs exactly these. To add a new image, see
+"Adding a new image" in the README.
 
 ## Pull requests
 
