@@ -1,0 +1,68 @@
+name: Changed images
+description: >
+  Emit the matrix of images to build. Precedence: a specific image (only) >
+  all images (all / shared-logic changed) > just the images whose files changed.
+inputs:
+  only:
+    description: Build just this image name (overrides everything else)
+    default: ''
+  all:
+    description: Build all images regardless of changes
+    default: 'false'
+  base:
+    description: Base git ref to diff against (changed-only mode)
+    default: ''
+outputs:
+  matrix:
+    description: JSON array of {name, context, image} to build
+    value: ${{ steps.compute.outputs.matrix }}
+  any:
+    description: 'true if at least one image is selected'
+    value: ${{ steps.compute.outputs.any }}
+runs:
+  using: composite
+  steps:
+    - id: compute
+      shell: bash
+      run: |
+        set -euo pipefail
+        manifest="$(cat images.json)"
+        emit() {
+          local m="$1"
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          if [ "$(echo "$m" | jq 'length')" -gt 0 ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Selected: $m"
+        }
+
+        if [ -n "${{ inputs.only }}" ]; then
+          emit "$(echo "$manifest" | jq -c --arg n "${{ inputs.only }}" '[ .[] | select(.name == $n) ]')"
+          exit 0
+        fi
+
+        if [ "${{ inputs.all }}" = "true" ]; then
+          emit "$(echo "$manifest" | jq -c '.')"; exit 0
+        fi
+
+        BASE="${{ inputs.base }}"
+        if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+           || ! git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null; then
+          echo "No usable base ref — building all to be safe"
+          emit "$(echo "$manifest" | jq -c '.')"; exit 0
+        fi
+
+        changed="$(git diff --name-only "$BASE" HEAD)"
+        echo "Changed files:"; echo "$changed"
+
+        # Shared build logic changed -> rebuild everything.
+        if echo "$changed" | grep -qE '^(images\.json|\.github/actions/changed-images/.*|\.github/workflows/(reusable-image|build-verify|publish)\.yml)$'; then
+          echo "Shared CI changed — building all"
+          emit "$(echo "$manifest" | jq -c '.')"; exit 0
+        fi
+
+        changed_json="$(printf '%s\n' "$changed" | jq -R . | jq -s .)"
+        emit "$(echo "$manifest" | jq -c --argjson c "$changed_json" \
+          '[ .[] | select(. as $i | $c | any(startswith($i.context + "/"))) ]')"

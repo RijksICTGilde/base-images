@@ -48,12 +48,14 @@ images/<name>/        Dockerfile, config, README, test.sh  (one folder per image
 
 1. Create `images/<name>/` with a `Dockerfile`, its config, a `README.md`, and a `test.sh`
    (takes the image ref as `$1`, asserts it works, exits non-zero on failure).
-2. Add one entry to the `matrix` in `build-verify.yml` and `publish.yml` (name, context, image).
+2. Add one entry to [`images.json`](images.json) (name, context, image) — the single source of
+   truth for the build matrix.
 3. Add the image dir under `docker` in `.github/dependabot.yml` and the package name in
    `cleanup.yml`.
 
 No new repo, secrets, or ruleset needed — the hardened build/scan/sign/publish logic in
-`reusable-image.yml` applies to every image automatically.
+`reusable-image.yml` applies to every image automatically. Only changed images are built on
+push/PR; the daily rebuild covers all of them for security patches.
 
 ## Local development
 

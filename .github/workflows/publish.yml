@@ -4,24 +4,55 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 3 * * *'   # daily rebuild: pulls fresh apk-signed Alpine security patches
+    - cron: '0 3 * * *'   # daily rebuild of ALL images: fresh apk-signed Alpine patches
   workflow_dispatch:
+    inputs:
+      image:
+        description: 'Build only this image (empty = all)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.c.outputs.matrix }}
+      any: ${{ steps.c.outputs.any }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - id: c
+        uses: ./.github/actions/changed-images
+        with:
+          # Daily rebuild and a no-arg manual run build everything; a push to main
+          # builds only the images that changed; a dispatch with an image name
+          # builds just that one.
+          only: ${{ github.event.inputs.image }}
+          all: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+          base: ${{ github.event.before }}
+
   publish:
+    needs: changes
+    if: ${{ needs.changes.outputs.any == 'true' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: nginx
-            context: images/nginx
-            image: ghcr.io/rijksictgilde/nginx-base
-          - name: haproxy-redirect
-            context: images/haproxy-redirect
-            image: ghcr.io/rijksictgilde/haproxy-redirect
+        include: ${{ fromJSON(needs.changes.outputs.matrix) }}
     permissions:
       contents: write       # create and push the CalVer git tag
       packages: write       # push image to GHCR
