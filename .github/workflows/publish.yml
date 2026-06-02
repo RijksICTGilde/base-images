@@ -1,4 +1,4 @@
-name: Publish Base Image
+name: Publish Base Images
 
 on:
   push:
@@ -7,155 +7,29 @@ on:
     - cron: '0 3 * * *'   # daily rebuild: pulls fresh apk-signed Alpine security patches
   workflow_dispatch:
 
-# Least privilege by default; the publish job raises only what it needs.
 permissions:
   contents: read
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: nginx
+            context: images/nginx
+            image: ghcr.io/rijksictgilde/nginx-base
+          - name: haproxy-redirect
+            context: images/haproxy-redirect
+            image: ghcr.io/rijksictgilde/haproxy-redirect
     permissions:
       contents: write       # create and push the CalVer git tag
       packages: write       # push image to GHCR
       id-token: write       # keyless cosign signing + provenance (OIDC)
       attestations: write   # build-provenance attestation
-    env:
-      IMAGE: ghcr.io/rijksictgilde/nginx-base
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
-        with:
-          # Best-effort allowlist for build + push + keyless sign + attest.
-          # If the first run on main blocks something, the runner logs it — add it here.
-          egress-policy: block
-          allowed-endpoints: >
-            github.com:443
-            api.github.com:443
-            token.actions.githubusercontent.com:443
-            objects.githubusercontent.com:443
-            release-assets.githubusercontent.com:443
-            results-receiver.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
-            ghcr.io:443
-            registry-1.docker.io:443
-            auth.docker.io:443
-            production.cloudfront.docker.com:443
-            dl-cdn.alpinelinux.org:443
-            mirror.gcr.io:443
-            check.trivy.dev:443
-            fulcio.sigstore.dev:443
-            rekor.sigstore.dev:443
-            tuf-repo-cdn.sigstore.dev:443
-            timestamp.sigstore.dev:443
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-
-      - name: Generate CalVer tag
-        id: version
-        run: |
-          YEAR_MONTH=$(date +%Y.%m)
-          EXISTING=$(git tag --list "${YEAR_MONTH}.*" | sort -V | tail -n1)
-          if [ -z "$EXISTING" ]; then
-            PATCH=0
-          else
-            LAST_PATCH=${EXISTING##*.}
-            PATCH=$((LAST_PATCH + 1))
-          fi
-          echo "version=${YEAR_MONTH}.${PATCH}" >> "$GITHUB_OUTPUT"
-          echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # --- Build once locally and gate on security before pushing -----------
-
-      - name: Build image (local, for scanning)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        with:
-          context: .
-          load: true
-          tags: nginx-base:candidate
-          build-args: |
-            IMAGE_REVISION=${{ github.sha }}
-            IMAGE_CREATED=${{ steps.version.outputs.created }}
-
-      - name: Trivy CVE scan (gate — block vulnerable publishes)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: nginx-base:candidate
-          scan-type: image
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-
-      - name: Smoke test (non-root, config, responds)
-        run: |
-          docker run --rm nginx-base:candidate nginx -t
-          UID_VAL=$(docker run --rm nginx-base:candidate id -u)
-          [ "$UID_VAL" != "0" ] || { echo "FAIL: running as root"; exit 1; }
-          docker run -d --name smoke -p 8080:8080 nginx-base:candidate
-          sleep 2
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ || true)
-          docker logs smoke; docker stop smoke
-          [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ] || [ "$STATUS" = "404" ] || { echo "FAIL: server did not respond (got $STATUS)"; exit 1; }
-
-      # --- Publish by digest, then sign/attest, then expose the tags --------
-      # Push by digest only (no version/latest tag yet). The public tags are
-      # created at the very end, after signing + attestation succeed — so a
-      # released tag never points to an unsigned or unattested image. If
-      # anything below fails, only an untagged digest exists (cleaned up by the
-      # retention workflow); no consumer can pull it via a release tag.
-
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        with:
-          context: .
-          sbom: true
-          provenance: mode=max
-          build-args: |
-            IMAGE_REVISION=${{ github.sha }}
-            IMAGE_CREATED=${{ steps.version.outputs.created }}
-          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-
-      - name: Sign image (keyless, OIDC)
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: cosign sign --yes "${IMAGE}@${DIGEST}"
-
-      - name: Attest build provenance (GitHub-native)
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        with:
-          subject-name: ${{ env.IMAGE }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
-
-      # Only now expose the image under its release tags — guaranteed signed + attested.
-      - name: Promote to release tags
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          docker buildx imagetools create \
-            --tag "${IMAGE}:${VERSION}" \
-            --tag "${IMAGE}:latest" \
-            "${IMAGE}@${DIGEST}"
-
-      - name: Create git tag
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          git tag "$VERSION"
-          git push origin "$VERSION"
+    uses: ./.github/workflows/reusable-image.yml
+    with:
+      name: ${{ matrix.name }}
+      context: ${{ matrix.context }}
+      image: ${{ matrix.image }}
+      publish: true
