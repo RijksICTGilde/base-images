@@ -1,7 +1,7 @@
 # haproxy:3.2.19-alpine (HAProxy 3.2 LTS) — pinned by digest for reproducibility.
 # Dependabot bumps this digest; the daily scheduled rebuild + `apk upgrade` below
 # pulls fresh, apk-signed Alpine security patches even when the digest is unchanged.
-FROM haproxy:3.2.19-alpine@sha256:4293e7e02c70e143778c86b4916f1b89e04f7a9221534b9abf6cace218c6b95f
+FROM haproxy:3.3.10-alpine@sha256:0b1bd52a831d0f0e0fb03a56e59fcd5c16b8e219b0e5f2eff388b40fd95b5d44
 
 # Pull the latest signed Alpine security patches at build time.
 USER root
