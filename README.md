@@ -1,6 +1,6 @@
 # base-images
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RijksICTGilde/nginx-base/badge)](https://scorecard.dev/viewer/?uri=github.com/RijksICTGilde/nginx-base)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RijksICTGilde/base-images/badge)](https://scorecard.dev/viewer/?uri=github.com/RijksICTGilde/base-images)
 
 A small collection of **hardened, non-root container images** for government production
 environments. Every image is rebuilt daily (so Alpine/OpenSSL patches land automatically),

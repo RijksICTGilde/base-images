@@ -8,7 +8,7 @@ attacks, and how to verify and report issues.
 ## Reporting a vulnerability
 
 Please report security issues privately via [GitHub Security Advisories]
-(https://github.com/RijksICTGilde/nginx-base/security/advisories/new) rather than
+(https://github.com/RijksICTGilde/base-images/security/advisories/new) rather than
 a public issue. We aim to acknowledge within 2 business days.
 
 ## Supported tags
@@ -78,7 +78,7 @@ IMAGE=ghcr.io/rijksictgilde/nginx-base:<tag>
 
 # 1. Verify the keyless signature
 cosign verify "$IMAGE" \
-  --certificate-identity-regexp '^https://github.com/RijksICTGilde/nginx-base/' \
+  --certificate-identity-regexp '^https://github.com/RijksICTGilde/base-images/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 2. Verify GitHub-native build provenance
@@ -87,7 +87,7 @@ gh attestation verify "oci://$IMAGE" --owner RijksICTGilde
 # 3. Inspect the SBOM / provenance attestations attached in the registry
 cosign download sbom "$IMAGE"
 cosign verify-attestation "$IMAGE" --type slsaprovenance \
-  --certificate-identity-regexp '^https://github.com/RijksICTGilde/nginx-base/' \
+  --certificate-identity-regexp '^https://github.com/RijksICTGilde/base-images/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

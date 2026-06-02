@@ -46,7 +46,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the project maintainers privately via a
-[GitHub Security Advisory](https://github.com/RijksICTGilde/nginx-base/security/advisories/new)
+[GitHub Security Advisory](https://github.com/RijksICTGilde/base-images/security/advisories/new)
 or by contacting the maintainers listed in [CODEOWNERS](.github/CODEOWNERS).
 All complaints will be reviewed and investigated promptly and fairly.
 

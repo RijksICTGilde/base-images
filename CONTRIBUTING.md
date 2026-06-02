@@ -39,7 +39,7 @@ exits non-zero on failure) — CI runs exactly these. To add a new image, see
 ## Reporting security issues
 
 Do **not** open a public issue. Use a private
-[Security Advisory](https://github.com/RijksICTGilde/nginx-base/security/advisories/new).
+[Security Advisory](https://github.com/RijksICTGilde/base-images/security/advisories/new).
 
 ## License
 

@@ -1,7 +1,7 @@
 # nginx-base
 
-[![Latest version](https://ghcr-badge.egpl.dev/rijksictgilde/nginx-base/latest_tag?trim=major&label=latest)](https://github.com/RijksICTGilde/nginx-base/pkgs/container/nginx-base)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RijksICTGilde/nginx-base/badge)](https://scorecard.dev/viewer/?uri=github.com/RijksICTGilde/nginx-base)
+[![Latest version](https://ghcr-badge.egpl.dev/rijksictgilde/nginx-base/latest_tag?trim=major&label=latest)](https://github.com/RijksICTGilde/base-images/pkgs/container/nginx-base)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RijksICTGilde/base-images/badge)](https://scorecard.dev/viewer/?uri=github.com/RijksICTGilde/base-images)
 
 Hardened, non-root nginx base image for serving static websites in government production environments.
 
@@ -14,7 +14,7 @@ image is **signed** and ships with an **SBOM** and **build-provenance** attestat
 
 Add it to your project's `Dockerfile`, **pinned by digest** — so builds are reproducible and you
 control upgrades (Dependabot bumps it for you). Grab the current version and digest from the
-[package page](https://github.com/RijksICTGilde/nginx-base/pkgs/container/nginx-base) (the badge
+[package page](https://github.com/RijksICTGilde/base-images/pkgs/container/nginx-base) (the badge
 above always links to the latest):
 
 ```dockerfile
