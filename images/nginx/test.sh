@@ -50,6 +50,17 @@ echo "== method restriction (POST -> 405) =="
 echo "== dotfiles not served (/.env -> not 200) =="
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/.env")" != "200" ] || { echo "FAIL: dotfile served"; exit 1; }
 
+echo "== health endpoints answer 200 with a body, not from disk =="
+for path in /healthz /readyz; do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}${path}")" = "200" ] || { echo "FAIL: ${path} not 200"; exit 1; }
+  curl -s "http://localhost:${PORT}${path}" | grep -q "ok" || { echo "FAIL: ${path} body empty"; exit 1; }
+done
+
+echo "== health probes are not logged =="
+curl -s -o /dev/null "http://localhost:${PORT}/healthz"
+curl -s -o /dev/null "http://localhost:${PORT}/readyz"
+docker logs "$NAME" 2>&1 | grep -q "healthz\|readyz" && { echo "FAIL: probe traffic logged"; exit 1; } || true
+
 echo "== nginx version hidden =="
 curl -sI "http://localhost:${PORT}/" | grep -qi "^server: nginx/" && { echo "FAIL: version exposed"; exit 1; } || true
 
