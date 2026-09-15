@@ -40,6 +40,8 @@ docker run -p 8080:8080 my-site
   baseline, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`,
   `X-Permitted-Cross-Domain-Policies` — including on cached static assets
 - **Method restriction** — only `GET`/`HEAD`; everything else returns `405`
+- **Health endpoints** — `/healthz` and `/readyz` return `200 ok`, answered by nginx itself and
+  kept out of the access log
 - **Dotfiles not served** — `.env`, `.git`, … return `404` (`.well-known` stays reachable)
 - **Server version hidden** — `server_tokens off`
 - **Gzip compression** and **1-year static-asset caching**
@@ -115,5 +117,23 @@ updates:
 - Read-only root filesystem (writable `/tmp` only)
 - Listens on port 8080
 - Minimal footprint: 1 worker, 128 connections
-- No `HEALTHCHECK` — use Kubernetes liveness/readiness probes instead
+- No Docker `HEALTHCHECK` — use Kubernetes liveness/readiness probes against the endpoints below
+
+### Health endpoints
+
+`/healthz` (liveness) and `/readyz` (readiness) both return `200` with an `ok` body, following the
+Kubernetes naming convention. For a static file server the two checks are equivalent, so both are
+provided purely so each probe can use its conventional path.
+
+They are answered by nginx itself rather than read from the docroot, so a probe stays green
+regardless of what your image copies in, and they are excluded from the access log — probe traffic
+fires every few seconds forever and says nothing about real visitors. Both are exact-match
+locations, so site content can never shadow them.
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 8080 }
+readinessProbe:
+  httpGet: { path: /readyz, port: 8080 }
+```
 

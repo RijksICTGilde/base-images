@@ -22,4 +22,15 @@ echo "$HEAD"
 echo "$HEAD" | grep -qi "^HTTP/.* 302"                                   || { echo "FAIL: not a 302"; exit 1; }
 echo "$HEAD" | grep -qi "^location: ${TARGET}/foo/bar?x=1"               || { echo "FAIL: wrong Location header"; exit 1; }
 
-echo "PASS: haproxy-redirect issues correct 302 redirects"
+echo "== health endpoints answer 200, not a redirect =="
+for path in /healthz /readyz; do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}${path}")" = "200" ] || { echo "FAIL: ${path} not 200"; exit 1; }
+  curl -s "http://localhost:${PORT}${path}" | grep -q "ok" || { echo "FAIL: ${path} body empty"; exit 1; }
+done
+
+echo "== health probes are not logged =="
+curl -s -o /dev/null "http://localhost:${PORT}/healthz"
+curl -s -o /dev/null "http://localhost:${PORT}/readyz"
+docker logs "$NAME" 2>&1 | grep -q "healthz\|readyz" && { echo "FAIL: probe traffic logged"; exit 1; } || true
+
+echo "PASS: haproxy-redirect issues correct 302 redirects and serves health endpoints"

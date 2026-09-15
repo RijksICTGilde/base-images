@@ -22,7 +22,15 @@ Listens on TCP `8080` (HTTP only). TLS termination is expected upstream at the c
 
 - Returns `302 Found` for every request.
 - `Location` is `${TARGET_URL}` with the original request URI appended (path + query preserved).
-- No host-matching, no path rewriting, no health endpoint — a TCP probe on `8080` suffices for liveness/readiness.
+- No host-matching and no path rewriting.
+- `/healthz` (liveness) and `/readyz` (readiness) are the exception: they return `200` with an `ok` body instead of a redirect, following the Kubernetes naming convention. This image has no upstream, so the two checks are equivalent and both exist purely so each probe can use its conventional path. Probe requests are not logged — they fire every few seconds forever and say nothing about the redirects you actually want to see.
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 8080 }
+readinessProbe:
+  httpGet: { path: /readyz, port: 8080 }
+```
 
 Example: with `TARGET_URL=https://new-host.example.com`, a request to `http://<pod>:8080/foo/bar?x=1` returns `Location: https://new-host.example.com/foo/bar?x=1`.
 
