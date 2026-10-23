@@ -1,10 +1,10 @@
 # haproxy-redirect
 
-HAProxy image without root that redirects every request with a `302` to a target set by one environment variable. Meant for a project whose URL changed and whose old hostname must point to the new one. One target per pod.
+Non-root HAProxy image that redirects every request with a `302` to the URL in `TARGET_URL`. For a project whose URL changed. One target per pod.
 
 ## Base image
 
-Based on `haproxy:*-alpine`. The version and digest are pinned in the [`Dockerfile`](Dockerfile) and bumped by Dependabot. The published image is scanned daily and rebuilt with `apk upgrade` when there is a fixable CVE or an Alpine update. It runs as uid 10001 (group 0), works with OpenShift `restricted-v2` and a read-only root filesystem, and is signed with an SBOM and provenance attestation. See [`SECURITY.md`](../../SECURITY.md).
+Based on `haproxy:*-alpine`, pinned in the [`Dockerfile`](Dockerfile). Runs as uid 10001 (group 0), works with OpenShift `restricted-v2` and a read-only root filesystem. Signed, with an SBOM and provenance attestation. See [`SECURITY.md`](../../SECURITY.md) and the [comparison with upstream](../../README.md#why-our-own-base-images).
 
 ## Environment variables
 
@@ -16,13 +16,13 @@ Without `TARGET_URL` the image still starts but redirects to the same path on th
 
 ## Port
 
-Listens on TCP `8080`, HTTP only. TLS belongs on the cluster Ingress. The image sends no security headers itself, including HSTS.
+TCP `8080`, HTTP only. TLS belongs on the cluster Ingress. The image sends no security headers, including HSTS.
 
 ## Behaviour
 
 - Every request gets `302 Found`, whatever the HTTP method.
 - `Location` is `$TARGET_URL` followed by the original path and query. There is no host matching and no path rewriting.
-- `/healthz` (liveness) and `/readyz` (readiness) return `200` with body `ok` instead of a redirect. The image has no upstream, so both are the same. These requests are not logged.
+- `/healthz` and `/readyz` return `200 ok` instead of a redirect and are not logged.
 - Logs go to stdout in HAProxy `httplog` format.
 
 ```yaml
