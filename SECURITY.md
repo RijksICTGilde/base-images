@@ -96,6 +96,8 @@ cosign verify-attestation "$IMAGE" --type slsaprovenance \
 - Non-root (uid 101), read-only-root-filesystem compatible (writable `/tmp` only)
 - Base image pinned by digest; `apk upgrade` on every build
 - Security headers on **every** response (incl. cached static assets)
-- HTTP methods restricted to `GET`/`HEAD`; dotfiles not served; version hidden
+- Static content restricted to `GET`/`HEAD` (opt-in proxy locations follow the backend's
+  policy); dotfiles not served anywhere; version hidden
+- One nginx worker, pinned (`worker_processes auto` would start one per node core)
 - Trivy CVE + Dockerfile-misconfiguration scanning (results in the Security tab)
 - OpenSSF Scorecard analysis

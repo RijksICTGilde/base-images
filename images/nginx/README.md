@@ -39,7 +39,13 @@ docker run -p 8080:8080 my-site
   `Referrer-Policy`, `Strict-Transport-Security`, a non-breaking `Content-Security-Policy`
   baseline, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`,
   `X-Permitted-Cross-Domain-Policies` — including on cached static assets
-- **Method restriction** — only `GET`/`HEAD`; everything else returns `405`
+- **Method restriction** — static content is `GET`/`HEAD` only; everything else returns `405`
+  (proxied locations set their own policy, see below)
+- **Reverse proxy, opt-in** — drop one file in `/etc/nginx/locations.d/` to proxy `/api/` (or
+  WebSockets) to a backend, with the hardening left intact. See [Reverse proxy](#reverse-proxy)
+- **One worker, on purpose** — `worker_processes 1`. The nginx default `auto` starts one worker per
+  *node* core (a CPU limit does not cap it), which on a large node means ~200 workers, hundreds of
+  MB per pod and OOMKills. One worker with 1024 connections serves thousands of concurrent users.
 - **Health endpoints** — `/healthz` and `/readyz` return `200 ok`, answered by nginx itself and
   kept out of the access log
 - **Dotfiles not served** — `.env`, `.git`, … return `404` (`.well-known` stays reachable)
@@ -58,6 +64,71 @@ FROM ghcr.io/rijksictgilde/nginx-base:2026.06.1@sha256:61ac904cd9438c6db6977c1ae
 COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY dist/ /usr/share/nginx/html/
 ```
+
+## Reverse proxy
+
+The image serves static files by default, but you can proxy part of the URL space to a backend
+without replacing `nginx.conf` (and without losing the hardening). Two extension points are
+included:
+
+| Path | Scope | Put here |
+| --- | --- | --- |
+| `/etc/nginx/locations.d/*.conf` | inside the `server` block | `location` blocks: proxied prefixes, extra rules |
+| `/etc/nginx/conf.d/*.conf` | `http` level | `upstream {}` blocks, `map`s, a `resolver`, `limit_req_zone`, or an extra `server {}` |
+
+Proxy `/api/` to a backend with one file:
+
+```nginx
+# api.conf
+location /api/ {
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://backend:8080;
+}
+```
+
+```dockerfile
+FROM ghcr.io/rijksictgilde/nginx-base:<version>@sha256:<digest>
+COPY api.conf /etc/nginx/locations.d/api.conf
+COPY dist/ /usr/share/nginx/html/
+```
+
+What the snippet does: HTTP/1.1 to the backend, passes `Host`, `X-Real-IP`, `X-Forwarded-For`
+(appended, so an ingress in front keeps the real client first), `X-Forwarded-Proto` and
+`X-Forwarded-Host`, hides the backend's `X-Powered-By`, and re-applies the security headers on
+proxied responses. It deliberately sets nothing else, so add per location what you need:
+
+```nginx
+location /api/ {
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://backend:8080;
+    client_max_body_size 50m;    # uploads (default 1m)
+    proxy_read_timeout   300s;   # slow backends (default 60s)
+    proxy_buffering      off;    # streaming / SSE
+}
+```
+
+For WebSockets use `snippets/proxy-websocket.conf` *instead of* `proxy.conf` (it adds the
+`Upgrade`/`Connection` handling and a long read timeout).
+
+Good to know:
+
+- **Methods.** Proxied locations are not restricted to `GET`/`HEAD`; the backend decides. Static
+  content under `location /` stays `GET`/`HEAD` only.
+- **Precedence.** A prefix location in `locations.d` beats `location /`, and the static-asset
+  caching rules are nested inside `location /`, so `/api/report.png` reaches your backend instead
+  of a `404` from disk. Dotfiles are blocked everywhere, so `/api/.env` is still `404`.
+- **Headers.** If the backend sends its own `Content-Security-Policy`, browsers enforce both. Ship
+  your own `/etc/nginx/security-headers.conf` without a CSP to let the backend's rule alone, or
+  add `proxy_hide_header Content-Security-Policy;` to the location to drop the backend's.
+- **DNS.** A hostname in `proxy_pass` is resolved once at startup, which is fine for a Kubernetes
+  Service. If you use a variable in `proxy_pass`, add a `resolver` in `conf.d` (the upstream
+  entrypoint exports the pod's resolvers as `$NGINX_LOCAL_RESOLVERS` for use in templates).
+- **Templates.** The upstream image's envsubst templates still work: files in
+  `/etc/nginx/templates/*.template` are rendered into `conf.d/` at startup (set
+  `NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/locations.d` to render locations instead). This needs a
+  writable filesystem, so it does not combine with `readOnlyRootFilesystem`.
+- **Capacity.** One worker with 1024 connections; a proxied request uses two. Raise
+  `worker_connections` in your own `nginx.conf` only if you really measure a limit.
 
 ## Lean & low-footprint
 
@@ -116,7 +187,7 @@ updates:
 - Non-root (uid 101)
 - Read-only root filesystem (writable `/tmp` only)
 - Listens on port 8080
-- Minimal footprint: 1 worker, 128 connections
+- Minimal footprint: 1 worker (pinned), 1024 connections
 - No Docker `HEALTHCHECK` — use Kubernetes liveness/readiness probes against the endpoints below
 
 ### Health endpoints

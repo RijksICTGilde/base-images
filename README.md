@@ -11,7 +11,7 @@ attestation. See [`SECURITY.md`](SECURITY.md).
 
 | Image | What it does | Pull |
 | --- | --- | --- |
-| [**nginx**](images/nginx/) | Hardened nginx base for serving static sites. `FROM` it and copy your `dist/`. Security headers, GET/HEAD only, dotfiles blocked. | `ghcr.io/rijksictgilde/nginx-base` |
+| [**nginx**](images/nginx/) | Hardened nginx base for static sites, with an opt-in reverse proxy (`/api/` → backend, WebSockets) via one drop-in file. Security headers, dotfiles blocked, one pinned worker. | `ghcr.io/rijksictgilde/nginx-base` |
 | [**haproxy-redirect**](images/haproxy-redirect/) | Ready-to-run pod that `302`-redirects **every** request to `$TARGET_URL` (path + query preserved). Set the env var; that's all it does. | `ghcr.io/rijksictgilde/haproxy-redirect` |
 
 Each image's own README has the full usage and options. Pin by digest in production and let
