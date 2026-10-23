@@ -21,14 +21,13 @@ a public issue. We aim to acknowledge within 2 business days.
 
 ### Retention
 
-Versions are pruned daily: anything **older than 180 days is deleted**, but the
-**12 newest tagged versions and `latest` are always kept**. Builds are event-driven,
-so this amounts to a handful of versions per month, not hundreds. Pin a digest and
-bump it at your own pace (Dependabot does this for you); a version you pinned stays
-pullable for half a year. Old versions with open CVEs are **not** deleted early:
-that would break the builds of exactly the consumers who have not bumped yet. The
-daily scan (below) reports them instead. Signatures, SBOMs, and provenance
-attestations of retained images are preserved.
+**Tagged versions are never deleted.** A digest you pinned stays pullable. Whether
+an older version is still acceptable to run is your decision, not ours to enforce by
+removing it: the daily scan (below) reports which published versions have open CVEs,
+and Dependabot offers you the bump. Builds are event-driven, so the catalogue grows by
+a handful of versions per month, not hundreds. A daily housekeeping job removes only
+untagged manifests, orphaned referrers and ghost indexes that nothing references;
+signatures, SBOMs and provenance attestations of every tagged version are kept.
 
 ## How patching works — two independent layers
 

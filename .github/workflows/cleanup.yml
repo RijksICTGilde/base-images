@@ -1,19 +1,18 @@
-name: Cleanup old images
+name: Registry housekeeping
 
-# Builds are event-driven (see scan.yml), so a handful of versions per month
-# accumulate rather than one per night. Consumers pin by digest and bump at
-# their own pace, so old versions stay pullable for half a year. This prunes
-# beyond that while never orphaning the cosign signatures / SBOM / provenance
-# attestations of images we keep. Whether an old version still has open CVEs
-# is reported by scan.yml, not enforced by deletion: deleting a digest breaks
-# the builds of exactly the consumers who have not bumped yet.
+# Tagged versions are never deleted. Consumers pin by digest and bump at their
+# own pace; whether a version is still safe to run is their call, informed by
+# the daily scan (scan.yml), not ours to enforce by deleting it. Builds are
+# event-driven, so the catalogue grows by a handful of versions per month.
 #
-# Policy: delete versions older than 180 days, but always keep the 12 newest
-# tagged versions + `latest`. Untagged/orphaned manifests are removed.
+# This only removes what nobody can reference: untagged manifests left behind
+# by push-by-digest, orphaned referrers, and ghost multi-arch indexes. The
+# cosign signatures / SBOM / provenance attestations of every tagged version
+# are kept intact.
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # daily; prunes only what crossed the 180-day line
+    - cron: '0 4 * * *'   # daily housekeeping of untagged/orphaned manifests only
   workflow_dispatch:
     inputs:
       dry_run:
@@ -39,16 +38,14 @@ jobs:
             api.github.com:443
             ghcr.io:443
 
-      - name: Prune old image versions
+      - name: Remove untagged, orphaned and ghost manifests
         uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           owner: RijksICTGilde
           package: nginx-base,haproxy-redirect
           # Scheduled run prunes for real; manual dispatch defaults to dry-run.
           dry-run: ${{ inputs.dry_run || 'false' }}
-          older-than: 180 days
-          keep-n-tagged: 12
-          exclude-tags: latest
+          # No older-than / keep-n-tagged: tagged versions are never candidates.
           delete-untagged: true
           delete-orphaned-images: true
           delete-ghost-images: true

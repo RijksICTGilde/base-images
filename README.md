@@ -71,5 +71,5 @@ task test-all                       # test every image
 ## Versioning & retention
 
 CalVer per image (`YYYY.MM.PATCH`), git-tagged as `<name>/YYYY.MM.PATCH`. Old image versions
-are pruned daily (older than 180 days, keeping the 12 newest tagged + `latest`); signatures and
+are never deleted; only untagged/orphaned manifests are pruned daily. Signatures and
 attestations of retained images are preserved.
