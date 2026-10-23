@@ -1,10 +1,14 @@
 # base-images
 
+**Lean, mean, security-clean production machines.**
+
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RijksICTGilde/base-images/badge)](https://scorecard.dev/viewer/?uri=github.com/RijksICTGilde/base-images)
 
 A small collection of hardened, non-root container images for government environments. Every image runs as an unprivileged user, is scanned, signed with keyless cosign, and ships with an SBOM and a build-provenance attestation. Published images are scanned daily and rebuilt only when there is a reason: a fixable CVE, pending Alpine updates (batched weekly), a new upstream version, or a change in this repository. See [`SECURITY.md`](SECURITY.md).
 
 ## Why our own base images
+
+Your site is a folder: copy it into the nginx image with a two-line Dockerfile and it runs, with no nginx configuration. See [Usage](images/nginx/README.md#usage).
 
 The upstream images are written for a single host. On a Kubernetes node with many cores they behave differently, and their defaults leave out settings a government site needs. These images change those defaults and nothing else. The numbers below were measured on the current builds against the upstream image each one is based on.
 
