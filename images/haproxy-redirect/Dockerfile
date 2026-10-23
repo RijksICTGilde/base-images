@@ -1,4 +1,4 @@
-# haproxy:3.2.19-alpine (HAProxy 3.2 LTS) — pinned by digest for reproducibility.
+# haproxy (alpine), pinned by digest for reproducible builds.
 # Dependabot bumps this digest; a rebuild (dispatched by scan.yml on a fixable CVE or
 # pending Alpine updates) + `apk upgrade` below pulls fresh, apk-signed Alpine security
 # patches even when the digest is unchanged.
@@ -21,6 +21,6 @@ LABEL org.opencontainers.image.title="haproxy-redirect" \
       org.opencontainers.image.description="Minimal non-root HAProxy image that 302-redirects every request to \$TARGET_URL." \
       org.opencontainers.image.source="https://github.com/RijksICTGilde/base-images" \
       org.opencontainers.image.licenses="EUPL-1.2" \
-      org.opencontainers.image.base.name="docker.io/library/haproxy:3.2.19-alpine" \
+      org.opencontainers.image.base.name="docker.io/library/haproxy" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.created="${IMAGE_CREATED}"
