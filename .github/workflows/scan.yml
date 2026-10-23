@@ -25,6 +25,7 @@ permissions:
 jobs:
   images:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.c.outputs.matrix }}
     steps:
@@ -52,6 +53,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.images.outputs.matrix) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: write   # dispatch publish.yml for an image that needs a rebuild
