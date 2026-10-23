@@ -12,6 +12,7 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.c.outputs.matrix }}
       any: ${{ steps.c.outputs.any }}
@@ -58,6 +59,7 @@ jobs:
     needs: [changes, verify]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Gate
         run: |

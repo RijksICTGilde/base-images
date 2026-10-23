@@ -26,6 +26,7 @@ permissions:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       packages: write   # delete package versions
     steps:
