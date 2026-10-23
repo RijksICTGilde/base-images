@@ -13,6 +13,8 @@ trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
 
 echo '<html><body>NGINX-BASE-SERVES-OK-7f3a</body></html>' > "$TMP/index.html"
 echo '.marker{content:"CSS-SERVES-OK-9b2c"}' > "$TMP/app.css"
+echo 'CUSTOM-404-PAGE' > "$TMP/404.html"
+echo 'CUSTOM-50X-PAGE' > "$TMP/50x.html"
 echo 'SECRET' > "$TMP/.env"
 
 # What a consumer ships to proxy an API: one file in locations.d. The backend
@@ -22,6 +24,12 @@ cat > "$TMP/api.conf" <<'EOF'
 location /api/ {
     include /etc/nginx/snippets/proxy.conf;
     proxy_pass http://127.0.0.1:8081;
+}
+EOF
+cat > "$TMP/down.conf" <<'EOF'
+location /down/ {
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://127.0.0.1:9;
 }
 EOF
 cat > "$TMP/backend.conf" <<'EOF'
@@ -40,7 +48,10 @@ FROM ${IMAGE}
 COPY index.html /usr/share/nginx/html/index.html
 COPY app.css /usr/share/nginx/html/app.css
 COPY .env /usr/share/nginx/html/.env
+COPY 404.html /usr/share/nginx/html/404.html
+COPY 50x.html /usr/share/nginx/html/50x.html
 COPY api.conf /etc/nginx/locations.d/api.conf
+COPY down.conf /etc/nginx/locations.d/down.conf
 COPY backend.conf /etc/nginx/conf.d/backend.conf
 EOF
 
@@ -94,6 +105,12 @@ curl -s "$URL/api/report.png" | grep -q "BACKEND GET /api/report.png" || { echo 
 echo "== reverse proxy: X-Forwarded-For is appended, backend's X-Powered-By is hidden =="
 curl -s -H 'X-Forwarded-For: 203.0.113.9' "$URL/api/who" | grep -q "xff=203.0.113.9, " || { echo "FAIL: X-Forwarded-For not appended"; exit 1; }
 curl -sI "$URL/api/who" | grep -qi "x-powered-by" && { echo "FAIL: backend X-Powered-By leaked"; exit 1; } || true
+
+echo "== custom error pages from the docroot are used (404 and 502) =="
+[ "$(code "$URL/does-not-exist")" = "404" ] || { echo "FAIL: missing file not 404"; exit 1; }
+curl -s "$URL/does-not-exist" | grep -q "CUSTOM-404-PAGE" || { echo "FAIL: custom 404.html not used"; exit 1; }
+[ "$(code "$URL/down/x")" = "502" ] || { echo "FAIL: dead backend not 502"; exit 1; }
+curl -s "$URL/down/x" | grep -q "CUSTOM-50X-PAGE" || { echo "FAIL: custom 50x.html not used"; exit 1; }
 
 echo "== health endpoints answer 200 with a body, not from disk =="
 for path in /healthz /readyz; do

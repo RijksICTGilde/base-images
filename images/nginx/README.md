@@ -7,7 +7,7 @@ Hardened nginx base image without root for static websites in government environ
 
 ## Usage
 
-Pin the base image by digest so builds are reproducible and you decide when to upgrade. Dependabot can propose the bumps. Take the current version and digest from the [package page](https://github.com/RijksICTGilde/base-images/pkgs/container/nginx-base).
+Put your built site in a folder and copy it into the image. No nginx configuration is needed.
 
 ```dockerfile
 FROM ghcr.io/rijksictgilde/nginx-base:<version>@sha256:<digest>
@@ -18,6 +18,27 @@ COPY dist/ /usr/share/nginx/html/
 docker build -t my-site .
 docker run -p 8080:8080 my-site
 ```
+
+Pin the base image by digest so builds are reproducible and you decide when to upgrade. Dependabot can propose the bumps. Take the current version and digest from the [package page](https://github.com/RijksICTGilde/base-images/pkgs/container/nginx-base).
+
+### Error pages
+
+Add a `404.html` and a `50x.html` to your folder and they are used, with the right status code. `404.html` also answers requests for blocked dotfiles. `50x.html` answers `500`, `502`, `503` and `504`, including a proxied backend that is down. Without your own files nginx shows its built-in pages.
+
+### Single-page apps
+
+A request for a path that is not a file returns `404`, so a deep link into a client-side router fails. To serve `index.html` for those paths, add one file:
+
+```nginx
+# spa.conf
+error_page 404 =200 /index.html;
+```
+
+```dockerfile
+COPY spa.conf /etc/nginx/locations.d/spa.conf
+```
+
+Every missing path then returns `index.html` with status `200`, including a missing asset. Real files and `/healthz` are not affected.
 
 ## What is included
 
