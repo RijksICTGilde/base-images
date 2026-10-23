@@ -1,15 +1,19 @@
 name: Cleanup old images
 
-# Nightly builds accumulate tags, and old images carry known CVEs we don't want
-# pullable. This prunes them while protecting recent releases and never orphaning
-# the cosign signatures / SBOM / provenance attestations of images we keep.
+# Builds are event-driven (see scan.yml), so a handful of versions per month
+# accumulate rather than one per night. Consumers pin by digest and bump at
+# their own pace, so old versions stay pullable for half a year. This prunes
+# beyond that while never orphaning the cosign signatures / SBOM / provenance
+# attestations of images we keep. Whether an old version still has open CVEs
+# is reported by scan.yml, not enforced by deletion: deleting a digest breaks
+# the builds of exactly the consumers who have not bumped yet.
 #
-# Policy: delete versions older than 30 days, but always keep the 15 newest
+# Policy: delete versions older than 180 days, but always keep the 12 newest
 # tagged versions + `latest`. Untagged/orphaned manifests are removed.
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # daily, an hour after the publish rebuild
+    - cron: '0 4 * * *'   # daily; prunes only what crossed the 180-day line
   workflow_dispatch:
     inputs:
       dry_run:
@@ -42,8 +46,8 @@ jobs:
           package: nginx-base,haproxy-redirect
           # Scheduled run prunes for real; manual dispatch defaults to dry-run.
           dry-run: ${{ inputs.dry_run || 'false' }}
-          older-than: 30 days
-          keep-n-tagged: 15
+          older-than: 180 days
+          keep-n-tagged: 12
           exclude-tags: latest
           delete-untagged: true
           delete-orphaned-images: true

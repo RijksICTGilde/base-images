@@ -1,6 +1,7 @@
 # nginxinc/nginx-unprivileged:1.26-alpine — pinned by digest for reproducibility.
-# Dependabot bumps this digest; the daily scheduled rebuild + `apk upgrade` below
-# pulls fresh, apk-signed Alpine security patches even when the digest is unchanged.
+# Dependabot bumps this digest; a rebuild (dispatched by scan.yml on a fixable CVE or
+# pending Alpine updates) + `apk upgrade` below pulls fresh, apk-signed Alpine security
+# patches even when the digest is unchanged.
 FROM nginxinc/nginx-unprivileged:1.31.6-alpine@sha256:884e0b7f42f303641b0f4e78755aea647521dca0b89ca3be7992ad78b5c07434
 
 # Pull the latest signed Alpine security patches at build time (fixes e.g. OpenSSL CVEs).

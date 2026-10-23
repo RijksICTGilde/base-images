@@ -1,10 +1,12 @@
 name: Publish Base Images
 
+# No timer: images are rebuilt when there is a reason. A push to main builds the
+# images that changed; scan.yml dispatches a build for an image whose published
+# `latest` has a fixable CVE or pending Alpine updates; a manual dispatch builds
+# one image or all of them.
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: '0 3 * * *'   # daily rebuild of ALL images: fresh apk-signed Alpine patches
   workflow_dispatch:
     inputs:
       image:
@@ -39,11 +41,11 @@ jobs:
       - id: c
         uses: ./.github/actions/changed-images
         with:
-          # Daily rebuild and a no-arg manual run build everything; a push to main
-          # builds only the images that changed; a dispatch with an image name
-          # builds just that one.
+          # A no-arg manual run builds everything; a push to main builds only the
+          # images that changed; a dispatch with an image name (manual, or from
+          # scan.yml) builds just that one.
           only: ${{ github.event.inputs.image }}
-          all: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+          all: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
           base: ${{ github.event.before }}
 
   publish:
