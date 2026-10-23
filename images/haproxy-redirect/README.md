@@ -1,29 +1,29 @@
 # haproxy-redirect
 
-Minimal, hardened HAProxy image that issues an HTTP `302` redirect for every incoming request, with the target URL supplied via a single environment variable.
-
-Intended as a redirect deployment when a project's URL has changed and the old hostname must point to a new one. One redirect per pod (one `TARGET_URL` per deployment).
+HAProxy image without root that redirects every request with a `302` to a target set by one environment variable. Meant for a project whose URL changed and whose old hostname must point to the new one. One target per pod.
 
 ## Base image
 
-`haproxy:3.2.19-alpine` (HAProxy 3.2 LTS), pinned by digest; the published image is scanned daily and rebuilt with `apk upgrade` when a fixable CVE or pending Alpine updates show up. Runs as `USER 10001`, no root, no writable paths — compatible with OpenShift `restricted-v2` and read-only root filesystems. Signed (keyless cosign) with an SBOM + provenance attestation; see the repo [`SECURITY.md`](../../SECURITY.md).
+Based on `haproxy:*-alpine`. The version and digest are pinned in the [`Dockerfile`](Dockerfile) and bumped by Dependabot. The published image is scanned daily and rebuilt with `apk upgrade` when there is a fixable CVE or an Alpine update. It runs as uid 10001 (group 0), works with OpenShift `restricted-v2` and a read-only root filesystem, and is signed with an SBOM and provenance attestation. See [`SECURITY.md`](../../SECURITY.md).
 
 ## Environment variables
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `TARGET_URL` | yes | Absolute URL to redirect to. The original request path and query string are appended. Example: `https://new-host.example.com` |
+| `TARGET_URL` | yes | Absolute URL to redirect to, for example `https://new-host.example.com`. A trailing slash is removed and the original path and query are appended. |
+
+Without `TARGET_URL` the image still starts but redirects to the same path on the same host, which is a redirect loop.
 
 ## Port
 
-Listens on TCP `8080` (HTTP only). TLS termination is expected upstream at the cluster Ingress.
+Listens on TCP `8080`, HTTP only. TLS belongs on the cluster Ingress. The image sends no security headers itself, including HSTS.
 
 ## Behaviour
 
-- Returns `302 Found` for every request.
-- `Location` is `${TARGET_URL}` with the original request URI appended (path + query preserved).
-- No host-matching and no path rewriting.
-- `/healthz` (liveness) and `/readyz` (readiness) are the exception: they return `200` with an `ok` body instead of a redirect, following the Kubernetes naming convention. This image has no upstream, so the two checks are equivalent and both exist purely so each probe can use its conventional path. Probe requests are not logged — they fire every few seconds forever and say nothing about the redirects you actually want to see.
+- Every request gets `302 Found`, whatever the HTTP method.
+- `Location` is `$TARGET_URL` followed by the original path and query. There is no host matching and no path rewriting.
+- `/healthz` (liveness) and `/readyz` (readiness) return `200` with body `ok` instead of a redirect. The image has no upstream, so both are the same. These requests are not logged.
+- Logs go to stdout in HAProxy `httplog` format.
 
 ```yaml
 livenessProbe:
@@ -32,9 +32,9 @@ readinessProbe:
   httpGet: { path: /readyz, port: 8080 }
 ```
 
-Example: with `TARGET_URL=https://new-host.example.com`, a request to `http://<pod>:8080/foo/bar?x=1` returns `Location: https://new-host.example.com/foo/bar?x=1`.
+With `TARGET_URL=https://new-host.example.com`, a request to `http://<pod>:8080/foo/bar?x=1` returns `Location: https://new-host.example.com/foo/bar?x=1`.
 
-## Local build & test
+## Local build and test
 
 ```bash
 task build -- haproxy-redirect
@@ -42,5 +42,5 @@ task test  -- haproxy-redirect
 # or directly:
 docker build -t haproxy-redirect:test images/haproxy-redirect/
 docker run --rm -e TARGET_URL=https://example.com -p 8080:8080 haproxy-redirect:test
-curl -I http://localhost:8080/foo?bar=1   # -> 302, Location: https://example.com/foo?bar=1
+curl -I http://localhost:8080/foo?bar=1   # 302, Location: https://example.com/foo?bar=1
 ```

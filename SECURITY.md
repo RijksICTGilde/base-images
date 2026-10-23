@@ -1,97 +1,58 @@
 # Security Policy
 
-`nginx-base` is a hardened, non-root nginx base image for serving static sites in
-government production environments. Security is the whole point of this image, so
-this document describes how it stays patched, how it defends against supply-chain
-attacks, and how to verify and report issues.
+This repository publishes hardened, non-root images for government environments: `nginx-base` and `haproxy-redirect`. This document describes how they stay patched, how the build defends against supply-chain attacks, and how to verify an image and report an issue.
 
 ## Reporting a vulnerability
 
-Please report security issues privately via [GitHub Security Advisories]
-(https://github.com/RijksICTGilde/base-images/security/advisories/new) rather than
-a public issue. We aim to acknowledge within 2 business days.
+Report security issues privately through [GitHub Security Advisories](https://github.com/RijksICTGilde/base-images/security/advisories/new) instead of a public issue. We aim to acknowledge within 2 business days.
 
 ## Supported tags
 
-- `latest` — the most recent successful build. Convenient for tracking, but
-  **pin by digest in production** (see below).
-- `YYYY.MM.PATCH` ([CalVer](https://calver.org/)) — immutable release tags. A new
-  patch is published on every build, and every build has a reason (see below), so
-  a version bump always means something changed.
+- `latest` is the most recent successful build. Convenient for tracking, but pin by digest in production (see below).
+- `YYYY.MM.PATCH` ([CalVer](https://calver.org/)) tags are immutable. A new patch is published on every build, and every build has a reason (see below), so a new version always means something changed.
 
 ### Retention
 
-**Tagged versions are never deleted.** A digest you pinned stays pullable. Whether
-an older version is still acceptable to run is your decision, not ours to enforce by
-removing it: the daily scan (below) reports which published versions have open CVEs,
-and Dependabot offers you the bump. Builds are event-driven, so the catalogue grows by
-a handful of versions per month, not hundreds. A daily housekeeping job removes only
-untagged manifests, orphaned referrers and ghost indexes that nothing references;
-signatures, SBOMs and provenance attestations of every tagged version are kept.
+Tagged versions are never deleted, so a digest you pinned stays pullable. Whether an older version is still acceptable to run is your decision. The daily scan reports which published versions have open CVEs, and Dependabot offers you the bump. Builds are event-driven, so the catalogue grows by a few versions per month. A daily job removes only untagged manifests, orphaned referrers and ghost indexes that nothing references. Signatures, SBOMs and provenance attestations of tagged versions are kept.
 
-## How patching works — two independent layers
+## How patching works
 
-**Layer A — OS packages (Alpine, OpenSSL): automatic, on demand, no human action.**
-A daily workflow (`scan.yml`) scans the published `latest` of each image without
-building anything. If it finds a `CRITICAL`/`HIGH` CVE **with an available fix**, it
-dispatches a rebuild the same day; pending Alpine package updates without a CVE are
-batched into a weekly (Monday) rebuild. The rebuild runs `apk upgrade`, pulling
-fresh Alpine packages that `apk` verifies against built-in Alpine signing keys.
-This is what keeps `libssl3`/`libcrypto3` and friends current without anyone
-merging anything. Vulnerable builds never ship: a Trivy `CRITICAL,HIGH` scan gates
-the publish step. CVEs **without** a fix cannot be built away; the scan lists them
-(including `MEDIUM`) in its job summary so they can be risk-assessed explicitly
-rather than silently ignored.
+Two layers patch independently.
 
-**Layer B — build tooling (GitHub Actions, base-image digest): Dependabot.**
-These change rarely and are the real supply-chain-attack surface, so they are
-handled deliberately — see below.
+**Layer A: OS packages (Alpine, OpenSSL), automatic and on demand.** A daily workflow (`scan.yml`) scans the published `latest` of each image without building. A CRITICAL or HIGH CVE with an available fix starts a rebuild the same day. Pending Alpine updates without a CVE are rebuilt in a weekly batch on Monday. The rebuild runs `apk upgrade`, which verifies packages against the Alpine signing keys, and a Trivy CRITICAL and HIGH scan gates the publish step. CVEs without a fix cannot be built away. The scan lists them, including MEDIUM, in its job summary so they get an explicit risk assessment.
+
+**Layer B: build tooling (GitHub Actions, base-image digest), through Dependabot.** These change rarely and are the main supply-chain attack surface, so they are handled as described below.
 
 ## Defending against compromised supply-chain updates
 
-A malicious *update* (e.g. a hijacked GitHub Action) is a different threat from a
-stale image. Our layered defense:
+A malicious update, such as a hijacked GitHub Action, is a different threat from a stale image. The build uses these layers:
 
-1. **Full commit-SHA pinning** — every Action and the base image are pinned by
-   immutable digest/SHA, defeating tag-rewriting attacks. (SHA pinning alone is
-   necessary but not sufficient — hence the layers below.)
-2. **Dependabot cooldown (7 days)** — only releases that have been public for a
-   week are proposed, so freshly-compromised versions are filtered out by the time
-   they reach us (such compromises are typically detected within hours).
-3. **Selective auto-merge** — only `patch`/`minor` bumps auto-merge, and only after
-   required CI checks pass. `major` bumps require human review.
-4. **Egress-filtered runners** — `step-security/harden-runner` constrains outbound
-   network traffic, a runtime backstop against secret exfiltration.
-5. **Least-privilege tokens + keyless signing** — `GITHUB_TOKEN` defaults to
-   read-only and is raised per-job; image signing uses keyless OIDC, so there is no
-   long-lived signing key to steal.
+1. **Commit-SHA pinning.** Every Action and base image is pinned by immutable digest or SHA, which defeats tag rewriting. Pinning alone is not enough, hence the layers below.
+2. **Dependabot cooldown of 7 days.** Only releases that have been public for a week are proposed, so most compromised releases are caught before they reach us.
+3. **Selective auto-merge.** Only patch and minor Dependabot bumps are auto-merged, and only after the required check passes. Major bumps are not auto-merged.
+4. **Egress-filtered runners.** `step-security/harden-runner` limits outbound network traffic as a runtime backstop against secret exfiltration.
+5. **Least-privilege tokens and keyless signing.** `GITHUB_TOKEN` is read-only by default and raised per job. Images are signed with keyless OIDC, so no long-lived signing key exists.
 
-### Required repository settings
+### Repository settings
 
-For the auto-merge / least-privilege model to hold, the repository owner must:
-
-- Enable **branch protection** on `main` with **required status checks**
-  (the `Build and Verify` job) and required review for `major` bumps.
-- Enable **"Allow auto-merge"** in repository settings.
-- Disable force-pushes to `main`.
+The `keep-main-safe` ruleset on `main` requires a pull request and the `build-and-verify` check, and blocks force-push and deletion. It does not require an approving review. Auto-merge must be enabled in the repository settings for the Dependabot flow.
 
 ## Verifying an image
 
-Every published image is signed (keyless cosign) and carries an SBOM and SLSA
-build-provenance attestation.
+Every published image is signed with keyless cosign and carries an SBOM and a SLSA build-provenance attestation.
 
 ```bash
-IMAGE=ghcr.io/rijksictgilde/nginx-base:<tag>
+IMAGE=ghcr.io/rijksictgilde/nginx-base:<tag>   # or ghcr.io/rijksictgilde/haproxy-redirect:<tag>
 
 # 1. Verify the keyless signature
 cosign verify "$IMAGE" \
   --certificate-identity-regexp '^https://github.com/RijksICTGilde/base-images/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-# 2. Verify GitHub-native build provenance
+# 2. Verify GitHub build provenance
 gh attestation verify "oci://$IMAGE" --owner RijksICTGilde
 
-# 3. Inspect the SBOM / provenance attestations attached in the registry
+# 3. Inspect the SBOM and provenance attestations in the registry
 cosign download sbom "$IMAGE"
 cosign verify-attestation "$IMAGE" --type slsaprovenance \
   --certificate-identity-regexp '^https://github.com/RijksICTGilde/base-images/' \
@@ -100,11 +61,8 @@ cosign verify-attestation "$IMAGE" --type slsaprovenance \
 
 ## Hardening summary
 
-- Non-root (uid 101), read-only-root-filesystem compatible (writable `/tmp` only)
-- Base image pinned by digest; `apk upgrade` on every build
-- Security headers on **every** response (incl. cached static assets)
-- Static content restricted to `GET`/`HEAD` (opt-in proxy locations follow the backend's
-  policy); dotfiles not served anywhere; version hidden
-- One nginx worker, pinned (`worker_processes auto` would start one per node core)
-- Trivy CVE + Dockerfile-misconfiguration scanning (results in the Security tab)
-- OpenSSF Scorecard analysis
+- Non-root: uid 101 for `nginx-base`, uid 10001 for `haproxy-redirect`. Both run with a read-only root filesystem.
+- Base image pinned by digest, and `apk upgrade` on every build.
+- `nginx-base`: security headers on every response including cached assets, static content limited to `GET` and `HEAD`, dotfiles never served, version hidden, one fixed worker, and opt-in proxy locations that follow the backend's method policy.
+- Trivy CVE and Dockerfile scans, with results in the Security tab.
+- OpenSSF Scorecard analysis.

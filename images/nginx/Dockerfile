@@ -1,4 +1,4 @@
-# nginxinc/nginx-unprivileged:1.26-alpine — pinned by digest for reproducibility.
+# nginxinc/nginx-unprivileged (alpine), pinned by digest for reproducible builds.
 # Dependabot bumps this digest; a rebuild (dispatched by scan.yml on a fixable CVE or
 # pending Alpine updates) + `apk upgrade` below pulls fresh, apk-signed Alpine security
 # patches even when the digest is unchanged.
@@ -31,6 +31,6 @@ LABEL org.opencontainers.image.title="nginx-base" \
       org.opencontainers.image.description="Hardened, non-root nginx base image for static sites in government production." \
       org.opencontainers.image.source="https://github.com/RijksICTGilde/base-images" \
       org.opencontainers.image.licenses="EUPL-1.2" \
-      org.opencontainers.image.base.name="docker.io/nginxinc/nginx-unprivileged:1.26-alpine" \
+      org.opencontainers.image.base.name="docker.io/nginxinc/nginx-unprivileged" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.created="${IMAGE_CREATED}"
