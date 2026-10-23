@@ -3,9 +3,10 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RijksICTGilde/base-images/badge)](https://scorecard.dev/viewer/?uri=github.com/RijksICTGilde/base-images)
 
 A small collection of **hardened, non-root container images** for government production
-environments. Every image is rebuilt daily (so Alpine/OpenSSL patches land automatically),
-scanned, **signed** (keyless cosign), and ships with an **SBOM** and **build-provenance**
-attestation. See [`SECURITY.md`](SECURITY.md).
+environments. Published images are **scanned daily** and **rebuilt when there is a reason**: a
+fixable CVE, pending Alpine package updates (batched weekly), a new upstream version, or a change
+here. Every build is **signed** (keyless cosign) and ships with an **SBOM** and
+**build-provenance** attestation. See [`SECURITY.md`](SECURITY.md).
 
 ## Images
 
@@ -40,7 +41,8 @@ images/<name>/        Dockerfile, config, README, test.sh  (one folder per image
 .github/workflows/
   reusable-image.yml   build → apk upgrade → Trivy gate → test.sh → push-by-digest → sign → attest → promote
   build-verify.yml     matrix over images, runs on every PR/push (verify only)
-  publish.yml          matrix over images, daily + on push to main (publish)
+  publish.yml          matrix over images, on push to main + on dispatch (publish)
+  scan.yml             daily scan of published images; dispatches publish.yml when needed
   scorecard.yml · cleanup.yml · dependabot-auto-merge.yml
 ```
 
@@ -55,7 +57,7 @@ images/<name>/        Dockerfile, config, README, test.sh  (one folder per image
 
 No new repo, secrets, or ruleset needed — the hardened build/scan/sign/publish logic in
 `reusable-image.yml` applies to every image automatically. Only changed images are built on
-push/PR; the daily rebuild covers all of them for security patches.
+push/PR; `scan.yml` watches the published images and rebuilds one when it needs a patch.
 
 ## Local development
 
@@ -69,5 +71,5 @@ task test-all                       # test every image
 ## Versioning & retention
 
 CalVer per image (`YYYY.MM.PATCH`), git-tagged as `<name>/YYYY.MM.PATCH`. Old image versions
-are pruned daily (older than 30 days, keeping the 15 newest tagged + `latest`); signatures and
+are never deleted; only untagged/orphaned manifests are pruned daily. Signatures and
 attestations of retained images are preserved.

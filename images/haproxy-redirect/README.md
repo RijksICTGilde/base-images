@@ -6,7 +6,7 @@ Intended as a redirect deployment when a project's URL has changed and the old h
 
 ## Base image
 
-`haproxy:3.2.19-alpine` (HAProxy 3.2 LTS), pinned by digest and rebuilt daily with `apk upgrade` for fresh security patches. Runs as `USER 10001`, no root, no writable paths — compatible with OpenShift `restricted-v2` and read-only root filesystems. Signed (keyless cosign) with an SBOM + provenance attestation; see the repo [`SECURITY.md`](../../SECURITY.md).
+`haproxy:3.2.19-alpine` (HAProxy 3.2 LTS), pinned by digest; the published image is scanned daily and rebuilt with `apk upgrade` when a fixable CVE or pending Alpine updates show up. Runs as `USER 10001`, no root, no writable paths — compatible with OpenShift `restricted-v2` and read-only root filesystems. Signed (keyless cosign) with an SBOM + provenance attestation; see the repo [`SECURITY.md`](../../SECURITY.md).
 
 ## Environment variables
 

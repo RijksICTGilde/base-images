@@ -1,0 +1,171 @@
+name: Scan published images
+
+# Images are rebuilt when there is a reason, not on a timer. This workflow is
+# the reason-finder: every day it scans the published `latest` of each image
+# (no build, no push) and only dispatches a publish when:
+#   - a CRITICAL/HIGH CVE with an available fix is found (any day), or
+#   - Alpine has package updates for the image (batched: Mondays only).
+# Unfixable CVEs are reported in the job summary for visibility, but cannot be
+# built away, so they do not trigger a rebuild. New upstream versions arrive
+# via Dependabot (base-image digest bumps) and changes here build on push.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_os_check:
+        description: 'Treat today as batch day for OS package updates'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.c.outputs.matrix }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - id: c
+        uses: ./.github/actions/changed-images
+        with:
+          all: 'true'
+
+  scan:
+    needs: images
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.images.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # dispatch publish.yml for an image that needs a rebuild
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          # GHCR (image + Trivy DB), GHCR blob storage, Trivy, Alpine CDN (apk index).
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            mirror.gcr.io:443
+            check.trivy.dev:443
+            dl-cdn.alpinelinux.org:443
+
+      # --- 1. Fixable CRITICAL/HIGH CVEs? (the same gate the build uses) ------
+
+      - name: Trivy — fixable CRITICAL/HIGH in published latest
+        id: fixable
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:latest
+          scan-type: image
+          format: table
+          output: fixable.txt
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      # --- 2. Everything else, for visibility only (BIO 8.08: unfixed CVEs need
+      #        an explicit risk assessment, which starts with seeing them) -------
+
+      - name: Trivy — full picture incl. unfixed (report only)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:latest
+          scan-type: image
+          format: table
+          output: all.txt
+          exit-code: '0'
+          ignore-unfixed: false
+          severity: CRITICAL,HIGH,MEDIUM
+          skip-setup-trivy: true
+
+      # --- 3. Alpine package updates available? (batched weekly) ---------------
+
+      - name: apk — pending package upgrades in published latest
+        id: apk
+        env:
+          IMAGE: ${{ matrix.image }}:latest
+        run: |
+          docker pull -q "$IMAGE"
+          # Simulate only; never changes the image. Needs root inside the container
+          # to read the package database, and --no-cache to fetch a fresh index.
+          docker run --rm --user 0 --entrypoint apk "$IMAGE" upgrade --simulate --no-cache > apk.txt 2>&1 || true
+          if grep -qE '^\([0-9]+/[0-9]+\) Upgrading' apk.txt; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$(date -u +%u)" = "1" ] || [ "${{ inputs.force_os_check }}" = "true" ]; then
+            echo "batch_day=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "batch_day=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --- 4. Decide, report, and dispatch ---------------------------------------
+
+      - name: Decide
+        id: decide
+        env:
+          FIXABLE: ${{ steps.fixable.outcome }}
+          PENDING: ${{ steps.apk.outputs.pending }}
+          BATCH_DAY: ${{ steps.apk.outputs.batch_day }}
+        run: |
+          reason=""
+          if [ "$FIXABLE" = "failure" ]; then
+            reason="fixable CRITICAL/HIGH CVE(s) in published image"
+          elif [ "$PENDING" = "true" ] && [ "$BATCH_DAY" = "true" ]; then
+            reason="Alpine package updates available (weekly batch)"
+          fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## ${{ matrix.name }} — \`${{ matrix.image }}:latest\`"
+            if [ -n "$reason" ]; then
+              echo "**Rebuild dispatched:** $reason"
+            elif [ "$PENDING" = "true" ]; then
+              echo "No fixable CVEs. Alpine package updates are pending and will be picked up on the next batch day (Monday)."
+            else
+              echo "Up to date: no fixable CVEs, no pending Alpine package updates."
+            fi
+            echo
+            echo "<details><summary>Fixable CRITICAL/HIGH (rebuild trigger)</summary>"
+            echo; echo '```'; cat fixable.txt 2>/dev/null || echo "(none)"; echo '```'; echo "</details>"
+            echo "<details><summary>All CRITICAL/HIGH/MEDIUM incl. unfixed (report only)</summary>"
+            echo; echo '```'; cat all.txt 2>/dev/null || echo "(none)"; echo '```'; echo "</details>"
+            echo "<details><summary>apk upgrade --simulate</summary>"
+            echo; echo '```'; cat apk.txt; echo '```'; echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch publish
+        if: ${{ steps.decide.outputs.reason != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          echo "Dispatching publish for ${{ matrix.name }}: $REASON"
+          gh workflow run publish.yml --ref "${{ github.ref_name }}" -f image="${{ matrix.name }}"

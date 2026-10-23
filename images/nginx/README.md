@@ -6,7 +6,8 @@
 Hardened, non-root nginx base image for serving static websites in government production environments.
 
 Published to `ghcr.io/rijksictgilde/nginx-base` using [CalVer](https://calver.org/) (`YYYY.MM.PATCH`).
-The image is **rebuilt daily** so Alpine/OpenSSL security patches land automatically, and every
+The published image is **scanned daily and rebuilt when a fix is available**, so Alpine/OpenSSL
+security patches land without a version bump on your side being required first, and every
 image is **signed** and ships with an **SBOM** and **build-provenance** attestation. See
 [`SECURITY.md`](SECURITY.md).
 
@@ -34,7 +35,8 @@ docker run -p 8080:8080 my-site
 
 - **Non-root** — runs as uid 101, no root escalation
 - **Read-only root filesystem** — only `/tmp` is writable
-- **Daily security patches** — base pinned by digest + `apk upgrade` on every build
+- **Security patches when they exist** — base pinned by digest + `apk upgrade` on every build;
+  a daily scan of the published image triggers a rebuild on a fixable CVE
 - **Security headers on every response** — `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy`, `Strict-Transport-Security`, a non-breaking `Content-Security-Policy`
   baseline, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`,
@@ -176,9 +178,11 @@ updates:
 
 ## CI/CD
 
-- **Daily** (and on every push to `main`): rebuild, run security tests + [Trivy](https://trivy.dev/)
-  CVE and Dockerfile-misconfiguration scanning (results in the **Security** tab), and — only if the
-  scan passes — build, push, **sign** (keyless cosign), and attach **SBOM** + **SLSA provenance**.
+- **Daily scan** of the published image; a fixable CRITICAL/HIGH CVE or (weekly) pending Alpine
+  updates dispatch a rebuild. On every push to `main` and on each such rebuild: security tests +
+  [Trivy](https://trivy.dev/) CVE and Dockerfile-misconfiguration scanning (results in the
+  **Security** tab), and — only if the scan passes — build, push, **sign** (keyless cosign), and
+  attach **SBOM** + **SLSA provenance**.
 - A matching CalVer git tag is created per release.
 - Dependency and supply-chain hardening is documented in [`SECURITY.md`](SECURITY.md).
 

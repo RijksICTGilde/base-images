@@ -5,9 +5,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        The image is rebuilt **daily** with `apk upgrade`, so most OS CVEs clear
-        automatically. Open this if a fix exists upstream but the published image
-        hasn't picked it up yet.
+        The published image is scanned **daily**; a fixable CRITICAL/HIGH CVE
+        triggers a rebuild with `apk upgrade` automatically. Open this if a fix
+        exists upstream but the published image hasn't picked it up yet, or for a
+        MEDIUM you want addressed sooner than the weekly batch.
   - type: input
     id: image
     attributes:

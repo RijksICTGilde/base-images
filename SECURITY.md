@@ -13,28 +13,35 @@ a public issue. We aim to acknowledge within 2 business days.
 
 ## Supported tags
 
-- `latest` — the most recent successful daily build. Convenient for tracking, but
+- `latest` — the most recent successful build. Convenient for tracking, but
   **pin by digest in production** (see below).
 - `YYYY.MM.PATCH` ([CalVer](https://calver.org/)) — immutable release tags. A new
-  patch is published on every (daily) rebuild.
+  patch is published on every build, and every build has a reason (see below), so
+  a version bump always means something changed.
 
 ### Retention
 
-Because images are rebuilt nightly and old images carry known CVEs, versions are
-pruned daily: anything **older than 30 days is deleted**, but the **15 newest
-tagged versions and `latest` are always kept**. Pin a recent digest and bump it
-regularly (Dependabot does this for you) — do not rely on a months-old version
-staying pullable. Signatures, SBOMs, and provenance attestations of retained
-images are preserved.
+**Tagged versions are never deleted.** A digest you pinned stays pullable. Whether
+an older version is still acceptable to run is your decision, not ours to enforce by
+removing it: the daily scan (below) reports which published versions have open CVEs,
+and Dependabot offers you the bump. Builds are event-driven, so the catalogue grows by
+a handful of versions per month, not hundreds. A daily housekeeping job removes only
+untagged manifests, orphaned referrers and ghost indexes that nothing references;
+signatures, SBOMs and provenance attestations of every tagged version are kept.
 
 ## How patching works — two independent layers
 
-**Layer A — OS packages (Alpine, OpenSSL): automatic, daily, no human action.**
-A scheduled workflow rebuilds the image every night. The build runs `apk upgrade`,
-pulling fresh Alpine packages that `apk` verifies against built-in Alpine signing
-keys. This is what keeps `libssl3`/`libcrypto3` and friends current without anyone
+**Layer A — OS packages (Alpine, OpenSSL): automatic, on demand, no human action.**
+A daily workflow (`scan.yml`) scans the published `latest` of each image without
+building anything. If it finds a `CRITICAL`/`HIGH` CVE **with an available fix**, it
+dispatches a rebuild the same day; pending Alpine package updates without a CVE are
+batched into a weekly (Monday) rebuild. The rebuild runs `apk upgrade`, pulling
+fresh Alpine packages that `apk` verifies against built-in Alpine signing keys.
+This is what keeps `libssl3`/`libcrypto3` and friends current without anyone
 merging anything. Vulnerable builds never ship: a Trivy `CRITICAL,HIGH` scan gates
-the publish step.
+the publish step. CVEs **without** a fix cannot be built away; the scan lists them
+(including `MEDIUM`) in its job summary so they can be risk-assessed explicitly
+rather than silently ignored.
 
 **Layer B — build tooling (GitHub Actions, base-image digest): Dependabot.**
 These change rarely and are the real supply-chain-attack surface, so they are
