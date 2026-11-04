@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           # Shared allowlist for all images: GitHub/Actions, container registries,
           # Alpine CDN (apk upgrade), Trivy DB, and sigstore (keyless sign + attest).
@@ -141,7 +141,7 @@ jobs:
 
       - name: Log in to GHCR
         if: ${{ inputs.publish }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
