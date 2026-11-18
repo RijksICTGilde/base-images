@@ -2,7 +2,7 @@
 # Dependabot bumps this digest; a rebuild (dispatched by scan.yml on a fixable CVE or
 # pending Alpine updates) + `apk upgrade` below pulls fresh, apk-signed Alpine security
 # patches even when the digest is unchanged.
-FROM haproxy:3.4.7-alpine@sha256:2caaf8b1a1ef67f3f1ea9b721f2821675d3ba4500fb518e23884fecb93e8dbaa
+FROM haproxy:3.4.7-alpine@sha256:b9fe316f718d5015c5cfebd8ca019591f3e44656f61d93cb8b59a1028961e530
 
 # Pull the latest signed Alpine security patches at build time.
 USER root
